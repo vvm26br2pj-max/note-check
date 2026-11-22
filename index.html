@@ -13,7 +13,7 @@
 :root{
   --bg:#eaeef4; --surface:#ffffff; --ink:#18202c; --muted:#596476; --staff:#2a3342;
   --border:#d3d9e2; --accent:#3150c9; --accent-soft:rgba(49,80,201,.13);
-  --ok:#17914c; --bad:#d23a2b; --ok-soft:rgba(23,145,76,.12); --bad-soft:rgba(210,58,43,.12);
+  --ok:#17914c; --bad:#d23a2b; --warn:#b97300; --ok-soft:rgba(23,145,76,.12); --bad-soft:rgba(210,58,43,.12);
   --f-display:"Space Grotesk",system-ui,sans-serif;
   --f-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-music:"Noto Music","Bravura Text","Apple Symbols","Segoe UI Symbol",serif;
@@ -22,13 +22,13 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#10141b; --surface:#19202a; --ink:#e7ebf1; --muted:#9aa4b4; --staff:#c7cfdb;
   --border:#2c3543; --accent:#8098ff; --accent-soft:rgba(128,152,255,.17);
-  --ok:#3fd083; --bad:#ff6a5a; --ok-soft:rgba(63,208,131,.14); --bad-soft:rgba(255,106,90,.14);
+  --ok:#3fd083; --bad:#ff6a5a; --warn:#f0b33c; --ok-soft:rgba(63,208,131,.14); --bad-soft:rgba(255,106,90,.14);
   color-scheme:dark;
 }}
 :root[data-theme="dark"]{
   --bg:#10141b; --surface:#19202a; --ink:#e7ebf1; --muted:#9aa4b4; --staff:#c7cfdb;
   --border:#2c3543; --accent:#8098ff; --accent-soft:rgba(128,152,255,.17);
-  --ok:#3fd083; --bad:#ff6a5a; --ok-soft:rgba(63,208,131,.14); --bad-soft:rgba(255,106,90,.14);
+  --ok:#3fd083; --bad:#ff6a5a; --warn:#f0b33c; --ok-soft:rgba(63,208,131,.14); --bad-soft:rgba(255,106,90,.14);
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -87,6 +87,7 @@ input[type=range]{width:110px;accent-color:var(--accent)}
 .staffline{stroke:var(--staff);stroke-width:1}
 .bar{stroke:var(--staff)}
 .glyph{fill:var(--staff);font-family:var(--f-music)}
+.beam{fill:var(--staff)}
 .tsig{fill:var(--staff);font-family:var(--f-display);font-weight:700}
 .n{color:var(--staff);cursor:pointer}
 .n .band{fill:transparent}
@@ -96,6 +97,12 @@ input[type=range]{width:110px;accent-color:var(--accent)}
 .n.ok{color:var(--ok)}
 .n.bad{color:var(--bad)}
 .n.bad .band{fill:var(--bad-soft)}
+.n.late{color:var(--warn)}
+button.rec .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--bad);margin-right:4px;vertical-align:0}
+button.rec.on{background:var(--bad);border-color:var(--bad);color:#fff}
+button.rec.on .dot{background:#fff;border-radius:2px}
+button:disabled{opacity:.45;cursor:default}
+.tnum{font-variant-numeric:tabular-nums;font-weight:600;min-width:2.5ch;display:inline-block;text-align:right}
 .n .head-f{fill:currentColor}
 .n .head-h{fill:none;stroke:currentColor}
 .n .stem,.n .ledger,.n .flag{stroke:currentColor;fill:none}
@@ -129,7 +136,7 @@ input[type=range]{width:110px;accent-color:var(--accent)}
 <div class="wrap">
   <header>
     <h1>Note Check</h1>
-    <p>Pick a piece, press <b>Start listening</b>, and play or sing. Each note turns green when you play it right and red when you miss.</p>
+    <p>Pick a piece, press <b>Start listening</b>, and play or sing. Each note turns green when you play it right and red when you miss. Press <b>Record</b> to play along in time, where every note has to be the right length too.</p>
   </header>
 
   <section class="panel" aria-label="Controls">
@@ -140,6 +147,7 @@ input[type=range]{width:110px;accent-color:var(--accent)}
       </div>
       <div class="btns">
         <button id="listen" class="primary" type="button">Start listening</button>
+        <button id="record" class="rec" type="button" title="Count in, then play along in time. Notes must be the right length too."><span class="dot" aria-hidden="true"></span> Record</button>
         <button id="hear" type="button" title="Play the current note so you can hear it">Hear note</button>
         <button id="restart" type="button">Restart</button>
       </div>
@@ -153,6 +161,11 @@ input[type=range]{width:110px;accent-color:var(--accent)}
       <label><input type="checkbox" id="anyoct" checked> Any octave counts</label>
       <label><input type="checkbox" id="names"> Show letter names</label>
       <label>Mic sensitivity <input type="range" id="sens" min="1" max="10" step="1" value="5"></label>
+    </div>
+    <div class="opts">
+      <span class="lbl">Record</span>
+      <label>Tempo <input type="range" id="tempo" min="40" max="120" step="4" value="60"> <output id="tempoval" class="tnum">60</output> bpm</label>
+      <label><input type="checkbox" id="metro" checked> Metronome clicks while I play</label>
     </div>
   </section>
 
@@ -179,9 +192,9 @@ input[type=range]{width:110px;accent-color:var(--accent)}
     <div id="music"></div>
     <div class="done" id="done" hidden>
       <strong id="donemsg">Done!</strong>
-      <div class="btns"><button type="button" id="again">Play again</button><button type="button" class="primary" id="next">Next piece</button></div>
+      <div class="btns"><button type="button" id="playback" hidden>Listen back</button><button type="button" id="again">Play again</button><button type="button" class="primary" id="next">Next piece</button></div>
     </div>
-    <div class="key"><span style="--c:var(--accent)">Your note</span><span style="--c:var(--ok)">Right</span><span style="--c:var(--bad)">Wrong</span><span style="--c:var(--bad)">Red dot: took more than one try</span></div>
+    <div class="key"><span style="--c:var(--accent)">Your note</span><span style="--c:var(--ok)">Right</span><span style="--c:var(--bad)">Wrong</span><span style="--c:var(--warn)">Right note, wrong length (Record)</span><span style="--c:var(--bad)">Red dot: took more than one try</span></div>
   </section>
 
   <section class="tips">
@@ -189,6 +202,7 @@ input[type=range]{width:110px;accent-color:var(--accent)}
     <ul>
       <li>Play one clear note at a time. To repeat the same note, stop briefly between them (a small gap or a new bow stroke).</li>
       <li>Tap any note on the staff to jump to it.</li>
+      <li><b>Record</b> counts you in for four beats, then moves through the piece at the tempo you set. Each note has to be the right pitch and held for its full length. Afterwards, <b>Listen back</b> plays your recording.</li>
       <li>If quiet notes are missed, raise the mic sensitivity. If background noise turns notes red, lower it.</li>
       <li>Headphones help with <b>Hear note</b>, so the mic doesn't pick up the speaker.</li>
     </ul>
@@ -215,16 +229,18 @@ const PIECES = [
    notes:"D5q B4q B4h | C5q A4q A4h | G4q A4q B4q C5q | D5q D5q D5h | D5q B4q B4h | C5q A4q A4h | G4q B4q D5q D5q | G4w"},
   {title:"Ode to Joy", by:"Ludwig van Beethoven", clef:"treble", key:"D",
    notes:"F#4q F#4q G4q A4q | A4q G4q F#4q E4q | D4q D4q E4q F#4q | F#4q. E4e E4h | F#4q F#4q G4q A4q | A4q G4q F#4q E4q | D4q D4q E4q F#4q | E4q. D4e D4h"},
-  {title:"Hot Cross Buns", by:"Traditional", clef:"bass", key:"C",
-   notes:"E3q D3q C3h | E3q D3q C3h | C3e C3e C3e C3e D3e D3e D3e D3e | E3q D3q C3h"},
-  {title:"Mary Had a Little Lamb", by:"Traditional", clef:"bass", key:"C",
-   notes:"E3q D3q C3q D3q | E3q E3q E3h | D3q D3q D3h | E3q G3q G3h | E3q D3q C3q D3q | E3q E3q E3q E3q | D3q D3q E3q D3q | C3w"},
-  {title:"Au Clair de la Lune", by:"French folk song", clef:"bass", key:"C",
-   notes:"C3q C3q C3q D3q | E3h D3h | C3q E3q D3q D3q | C3w | C3q C3q C3q D3q | E3h D3h | C3q E3q D3q D3q | C3w"},
-  {title:"Twinkle, Twinkle, Little Star", by:"Traditional", clef:"bass", key:"C",
-   notes:"C3q C3q G3q G3q | A3q A3q G3h | F3q F3q E3q E3q | D3q D3q C3h | G3q G3q F3q F3q | E3q E3q D3h | G3q G3q F3q F3q | E3q E3q D3h | C3q C3q G3q G3q | A3q A3q G3h | F3q F3q E3q E3q | D3q D3q C3h"},
-  {title:"Ode to Joy", by:"Ludwig van Beethoven", clef:"bass", key:"C",
-   notes:"E3q E3q F3q G3q | G3q F3q E3q D3q | C3q C3q D3q E3q | E3q. D3e D3h | E3q E3q F3q G3q | G3q F3q E3q D3q | C3q C3q D3q E3q | D3q. C3e C3h"},
+  {title:"Hot Cross Buns", by:"Traditional", clef:"bass", key:"D",
+   notes:"F#3q E3q D3h | F#3q E3q D3h | D3e D3e D3e D3e E3e E3e E3e E3e | F#3q E3q D3h"},
+  {title:"Mary Had a Little Lamb", by:"Traditional", clef:"bass", key:"D",
+   notes:"F#3q E3q D3q E3q | F#3q F#3q F#3h | E3q E3q E3h | F#3q A3q A3h | F#3q E3q D3q E3q | F#3q F#3q F#3q F#3q | E3q E3q F#3q E3q | D3w"},
+  {title:"Au Clair de la Lune", by:"French folk song", clef:"bass", key:"G",
+   notes:"G3q G3q G3q A3q | B3h A3h | G3q B3q A3q A3q | G3w | G3q G3q G3q A3q | B3h A3h | G3q B3q A3q A3q | G3w"},
+  {title:"Lightly Row", by:"German folk song", clef:"bass", key:"D",
+   notes:"A3q F#3q F#3h | G3q E3q E3h | D3q E3q F#3q G3q | A3q A3q A3h | A3q F#3q F#3h | G3q E3q E3h | D3q F#3q A3q A3q | D3w"},
+  {title:"Twinkle, Twinkle, Little Star", by:"Traditional", clef:"bass", key:"D",
+   notes:"D3q D3q A3q A3q | B3q B3q A3h | G3q G3q F#3q F#3q | E3q E3q D3h | A3q A3q G3q G3q | F#3q F#3q E3h | A3q A3q G3q G3q | F#3q F#3q E3h | D3q D3q A3q A3q | B3q B3q A3h | G3q G3q F#3q F#3q | E3q E3q D3h"},
+  {title:"Ode to Joy", by:"Ludwig van Beethoven", clef:"bass", key:"D",
+   notes:"F#3q F#3q G3q A3q | A3q G3q F#3q E3q | D3q D3q E3q F#3q | F#3q. E3e E3h | F#3q F#3q G3q A3q | A3q G3q F#3q E3q | D3q D3q E3q F#3q | E3q. D3e D3h"},
 ];
 
 /* ---------- Music helpers ---------- */
@@ -279,6 +295,8 @@ const $ = id => document.getElementById(id);
 let pieceIdx = 0, piece = null, parsed = null;
 let cur = 0, marks = [], missed = [];
 let mode = "wait", anyOct = true, showNames = false, sens = 5;
+let tempo = 60, metro = true, scoreMode = "practice", runTempo = 60;
+let run = null, recUrl = null;
 
 function store(k, v){ try { localStorage.setItem("notecheck:"+k, JSON.stringify(v)); } catch(e){} }
 function load(k, d){ try { const v = localStorage.getItem("notecheck:"+k); return v == null ? d : JSON.parse(v); } catch(e){ return d; } }
@@ -330,7 +348,7 @@ function render(){
     for (let l=0;l<5;l++){ const y = top + l*S; s += `<line class="staffline" x1="0" x2="${sysW}" y1="${y}" y2="${y}"/>`; }
     // clef
     if (clef === "treble") s += `<text class="glyph" x="${S*0.3}" y="${yPos(2)}" font-size="${S*4}">\u{1D11E}</text>`;
-    else s += `<text class="glyph" x="${S*0.3}" y="${yPos(6)}" font-size="${S*4}">\u{1D122}</text>`;
+    else s += bassClef(S*0.5, yPos(6), S);
     // key signature
     const ks = KEYS[piece.key]||0;
     const ksList = ks > 0 ? KEYSIG_POS[clef].sharp.slice(0,ks) : KEYSIG_POS[clef].flat.slice(0,-ks);
@@ -348,11 +366,47 @@ function render(){
     let x = hw;
     sys.forEach((m, mi) => {
       x += mPadL;
-      m.forEach(n => {
-        const w = slotBase(n,S,keyAcc)*k;
-        s += noteSVG(n, x, w, S, yPos, bottom, keyAcc, top);
-        x += w;
+      // place every note in the measure first, so beams can be fitted across them
+      let beat = 0;
+      const items = m.map(n => {
+        const p = step(n.letter, n.oct) - bottom;
+        const showAcc = needsAcc(n, keyAcc);
+        const it = {n, p, showAcc, beat,
+          cx: x + S*1.1 + (showAcc ? S*1.1 : 0), cy: yPos(p),
+          rx: n.type === "w" ? S*0.78 : S*0.62, up: p < 4, stemEnd: null, beamed: false};
+        x += slotBase(n,S,keyAcc)*k; beat += n.dur;
+        return it;
       });
+      // beam eighth notes that share a half bar (beats 1–2 or 3–4)
+      const groups = []; let g = null;
+      items.forEach(it => {
+        if (it.n.type === "e" && !it.n.dotted){
+          const half = Math.floor(it.beat/2 + 1e-9);
+          if (g && g.half === half) g.items.push(it); else { g = {half, items:[it]}; groups.push(g); }
+        } else g = null;
+      });
+      let beams = "";
+      groups.filter(gr => gr.items.length > 1).forEach(gr => {
+        const its = gr.items;
+        const up = its.reduce((a,it)=>a+it.p,0)/its.length < 4;
+        its.forEach(it => { it.up = up; it.beamed = true; it.sx = up ? it.cx + it.rx*0.9 : it.cx - it.rx*0.9; });
+        const A = its[0], B = its[its.length-1];
+        const yA = up ? A.cy - S*3.4 : A.cy + S*3.4;
+        let dy = (up ? B.cy - S*3.4 : B.cy + S*3.4) - yA;
+        dy = Math.max(-S*0.8, Math.min(S*0.8, dy));
+        const line = xx => yA + dy*(xx - A.sx)/((B.sx - A.sx) || 1);
+        let off = 0;
+        its.forEach(it => {
+          const need = up ? (it.cy - S*2.8) - line(it.sx) : (it.cy + S*2.8) - line(it.sx);
+          off = up ? Math.min(off, need) : Math.max(off, need);
+        });
+        its.forEach(it => { it.stemEnd = line(it.sx) + off; });
+        const t = up ? S*0.5 : -S*0.5, hw2 = S*0.065;
+        const x1 = A.sx - hw2, x2 = B.sx + hw2, y1 = line(A.sx)+off, y2 = line(B.sx)+off;
+        beams += `<polygon class="beam" points="${x1},${y1} ${x2},${y2} ${x2},${y2+t} ${x1},${y1+t}"/>`;
+      });
+      items.forEach(it => { s += noteSVG(it, S, yPos, top); });
+      s += beams;
       x += mPadR;
       const isEnd = last && mi === sys.length-1;
       if (isEnd) {
@@ -370,12 +424,17 @@ function render(){
   paint();
 }
 
-function noteSVG(n, x, w, S, yPos, bottom, keyAcc, top){
-  const p = step(n.letter, n.oct) - bottom;
-  const showAcc = needsAcc(n, keyAcc);
-  const cx = x + S*1.1 + (showAcc ? S*1.1 : 0);
-  const cy = yPos(p);
-  const rx = n.type === "w" ? S*0.78 : S*0.62, ry = S*0.45;
+// Bass clef drawn as a path: the head sits on the F line (y), two dots either side of it.
+function bassClef(x, y, S){
+  const P = (a,b) => `${(x+a*S).toFixed(2)},${(y+b*S).toFixed(2)}`;
+  const d = `M${P(0.15,-0.25)} C${P(0.3,-1.25)} ${P(1.5,-1.45)} ${P(2.05,-0.95)} C${P(2.75,-0.25)} ${P(2.5,1.45)} ${P(0.25,2.75)} L${P(0.15,2.55)} C${P(1.75,1.4)} ${P(1.95,0.1)} ${P(1.6,-0.6)} C${P(1.3,-1.15)} ${P(0.65,-1.05)} ${P(0.5,-0.5)} Z`;
+  return `<g class="glyph"><path d="${d}"/><circle cx="${x+S*0.55}" cy="${y-S*0.05}" r="${S*0.48}"/>`
+    + `<circle cx="${x+S*2.95}" cy="${y-S*0.5}" r="${S*0.2}"/><circle cx="${x+S*2.95}" cy="${y+S*0.5}" r="${S*0.2}"/></g>`;
+}
+
+function noteSVG(it, S, yPos, top){
+  const {n, p, showAcc, cx, cy, rx} = it;
+  const ry = S*0.45;
   let g = `<g class="n" data-i="${n.i}" tabindex="-1">`;
   g += `<rect class="band" x="${cx-S*1.5}" y="${top-S*2.6}" width="${S*3}" height="${S*4+S*5.6}" rx="${S*0.6}"/>`;
   // ledger lines
@@ -388,12 +447,12 @@ function noteSVG(n, x, w, S, yPos, bottom, keyAcc, top){
   const hollow = n.type === "h" || n.type === "w";
   g += `<ellipse class="${hollow?"head-h":"head-f"}" cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" transform="rotate(-20 ${cx} ${cy})"${hollow?` stroke-width="${S*0.2}"`:""}/>`;
   if (n.type !== "w"){
-    const up = p < 4;
+    const up = it.up;
     const sx = up ? cx + rx*0.9 : cx - rx*0.9;
     const y1 = up ? cy - S*0.15 : cy + S*0.15;
-    const y2 = up ? cy - S*3.4 : cy + S*3.4;
+    const y2 = it.beamed ? it.stemEnd : (up ? cy - S*3.4 : cy + S*3.4);
     g += `<line class="stem" x1="${sx}" x2="${sx}" y1="${y1}" y2="${y2}" stroke-width="${S*0.13}"/>`;
-    if (n.type === "e"){
+    if (n.type === "e" && !it.beamed){
       const d = up
         ? `M${sx},${y2} c${S*0.1},${S*1.1} ${S*1.3},${S*1.3} ${S*0.9},${S*2.7}`
         : `M${sx},${y2} c${S*0.1},${-S*1.1} ${S*1.3},${-S*1.3} ${S*0.9},${-S*2.7}`;
@@ -419,16 +478,23 @@ function paint(){
     el.classList.toggle("ok", m === "ok" || m === "fixed");
     el.classList.toggle("fixed", m === "fixed");
     el.classList.toggle("bad", m === "bad");
+    el.classList.toggle("late", m === "late");
   });
   const total = parsed.notes.length;
   const right = marks.filter(m => m === "ok").length;
-  $("score").textContent = `${right} of ${total} right first try`;
+  const late = marks.filter(m => m === "late").length;
+  $("score").textContent = scoreMode === "record" ? `${right} of ${total} right in time` : `${right} of ${total} right first try`;
   const t = parsed.notes[cur];
   $("target").textContent = t ? noteName(t) : "Done";
   const fin = cur >= total;
   $("done").hidden = !fin;
   if (fin){
-    $("donemsg").textContent = right === total ? `Perfect! All ${total} notes right first try.` : `Done! ${right} of ${total} notes right first try.`;
+    if (scoreMode === "record"){
+      $("donemsg").textContent = (right === total ? `Perfect take at ${runTempo} bpm! All ${total} notes right.` : `Recorded at ${runTempo} bpm: ${right} of ${total} notes right.`)
+        + (late ? ` ${late} had the right pitch but the wrong length.` : "");
+    } else {
+      $("donemsg").textContent = right === total ? `Perfect! All ${total} notes right first try.` : `Done! ${right} of ${total} notes right first try.`;
+    }
   }
 }
 
@@ -451,6 +517,8 @@ function selectPiece(i){
   restart();
 }
 function restart(){
+  if (run) stopRun();
+  scoreMode = "practice";
   cur = 0; marks = new Array(parsed.notes.length).fill(null); missed = new Array(parsed.notes.length).fill(false);
   render(); requireNewNote();
 }
@@ -458,6 +526,8 @@ function advance(){
   cur++; paint(); scrollToCurrent();
 }
 function jumpTo(i){
+  if (run) return;
+  if (scoreMode === "record") restart();
   cur = i; if (marks[i] === "bad") marks[i] = null; paint(); requireNewNote();
 }
 
@@ -512,6 +582,7 @@ async function startListening(){
   tick();
 }
 function stopListening(){
+  if (run) stopRun();
   listening = false; cancelAnimationFrame(raf);
   if (stream) stream.getTracks().forEach(t => t.stop());
   stream = null;
@@ -565,6 +636,7 @@ function track(now, rms, f, gate){
   if (f == null && rms > gate) return; // loud but no clear pitch (bow noise, consonant): ignore this frame
   if (f == null){
     // quiet frame: whatever comes next is a new note
+    T.quiet = true;
     T.onset = true; T.cand = null; T.lastKey = null; T.peak = 0; T.dipped = false;
     showHeard(null);
     return;
@@ -574,8 +646,10 @@ function track(now, rms, f, gate){
   if (!T.dipped && rms < T.peak*0.4){ T.dipped = true; T.dipLevel = rms; }
   if (T.dipped){
     T.dipLevel = Math.min(T.dipLevel, rms);
-    if (rms > T.dipLevel*2 && rms > gate*1.5){ T.dipped = false; T.peak = rms; T.onset = true; T.cand = null; }
+    if (rms > T.dipLevel*2 && rms > gate*1.5){ T.dipped = false; T.peak = rms; T.onset = true; T.cand = null; if (run) run.onsets.push(now); }
   }
+  if (T.quiet && run) run.onsets.push(now); // sound came back after a gap: a new attack
+  T.quiet = false;
   const mF = 69 + 12*Math.log2(f/440);
   const m = Math.round(mF);
   const key = anyOct ? ((m%12)+12)%12 : m;
@@ -585,7 +659,116 @@ function track(now, rms, f, gate){
   const ready = T.onset || T.cand.key !== T.lastKey;
   if (ready && now - T.cand.start >= 90 && T.cand.n >= 3){
     T.onset = false; T.lastKey = key;
-    judge(T.cand.sum / T.cand.n);
+    if (!run) judge(T.cand.sum / T.cand.n);
+  }
+  return mF;
+}
+
+/* ---------- Record: count-in, play along in time, grade pitch and length ---------- */
+const LAT = 60; // ms between a sound and the frame that hears it (measured ~50 ms, plus mic delay)
+let noiseBuf = null;
+function click(c, when, accent){
+  if (!noiseBuf){
+    const n = Math.floor(c.sampleRate*0.03);
+    noiseBuf = c.createBuffer(1, n, c.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i=0;i<n;i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/n, 4);
+  }
+  const src = c.createBufferSource(), g = c.createGain(), hp = c.createBiquadFilter();
+  src.buffer = noiseBuf; hp.type = "highpass"; hp.frequency.value = accent ? 1800 : 2600;
+  g.gain.value = accent ? 0.9 : 0.55;
+  src.connect(hp).connect(g).connect(c.destination);
+  src.start(when);
+  return src;
+}
+function setRecUI(on){
+  const b = $("record");
+  b.classList.toggle("on", on);
+  b.innerHTML = on ? `<span class="dot" aria-hidden="true"></span> Stop` : `<span class="dot" aria-hidden="true"></span> Record`;
+  $("hear").disabled = on; $("listen").disabled = on; sel.disabled = on; $("restart").disabled = on;
+}
+async function startRecord(){
+  if (run){ stopRun(); restart(); return; }
+  if (!listening){ await startListening(); if (!listening) return; }
+  restart();
+  if (playing){ playing.pause(); playing = null; $("playback").textContent = "Listen back"; muteUntil = 0; }
+  scoreMode = "record"; runTempo = tempo;
+  if (recUrl){ URL.revokeObjectURL(recUrl); recUrl = null; }
+  $("playback").hidden = true;
+  const beatMs = 60000/tempo, lead = 200;
+  const startMs = performance.now() + lead + 4*beatMs;
+  let b = 0;
+  const times = parsed.notes.map(n => { const a = b; b += n.dur; return [startMs + a*beatMs, startMs + b*beatMs]; });
+  const c = ensureCtx(), ct0 = c.currentTime + lead/1000;
+  const nClicks = 4 + (metro ? Math.round(b) : 0);
+  const clicks = [];
+  for (let i=0;i<nClicks;i++) clicks.push(click(c, ct0 + i*beatMs/1000, i%4 === 0));
+  run = {beatMs, startMs, times, frames:[], onsets:[], next:0, clicks, rec:null};
+  if (window.MediaRecorder && stream){
+    try {
+      const r = new MediaRecorder(stream), chunks = [];
+      r.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+      r.onstop = () => {
+        if (!chunks.length) return;
+        recUrl = URL.createObjectURL(new Blob(chunks, {type: r.mimeType || "audio/webm"}));
+        $("playback").hidden = false;
+      };
+      r.start(); run.rec = r;
+    } catch (e) {}
+  }
+  setRecUI(true); setStatus("Recording");
+  paint();
+}
+function stopRun(){
+  const r = run; run = null;
+  if (!r) return;
+  r.clicks.forEach(s => { try { s.stop(); } catch(e){} });
+  if (r.rec && r.rec.state !== "inactive") { try { r.rec.stop(); } catch(e){} }
+  setRecUI(false);
+  if (listening) setStatus("Listening");
+}
+function judgeTimed(r, i){
+  const [a, b] = r.times[i], dur = b - a;
+  const ws = a + Math.min(160, dur*0.3), we = b - Math.max(40, dur*0.15);
+  const target = parsed.notes[i].midi;
+  let N = 0, good = 0, wrong = 0;
+  for (const fr of r.frames){
+    if (fr.t < ws || fr.t > we) continue;
+    N++;
+    if (fr.m == null) continue;
+    let d = fr.m - target;
+    if (anyOct) d = ((d % 12) + 18) % 12 - 6;
+    if (Math.abs(d) < 0.6) good++; else wrong++;
+  }
+  const frac = N ? good/N : 0;
+  let res = frac >= 0.55 ? "ok" : (good > 0 && good >= wrong ? "late" : "bad");
+  // the same pitch twice in a row has to be played twice, not held through
+  if (res === "ok" && i > 0 && parsed.notes[i-1].midi === target){
+    const win = Math.min(250, dur*0.45);
+    if (!r.onsets.some(t => t - LAT >= a - win && t - LAT <= a + win)) res = "late";
+  }
+  marks[i] = res;
+}
+function runTick(now, mF, rms, gate){
+  const r = run;
+  if (now < r.startMs){
+    const beat = Math.floor((now - (r.startMs - 4*r.beatMs)) / r.beatMs) + 1;
+    $("target").textContent = beat >= 1 ? `${beat}…` : "Ready";
+    return;
+  }
+  r.frames.push({t: now - LAT, m: mF});
+  let vi = r.times.findIndex(([, e]) => now < e);
+  if (vi < 0) vi = r.times.length - 1;
+  let changed = false;
+  if (vi !== cur){ cur = vi; changed = true; }
+  while (r.next < r.times.length && now - LAT > r.times[r.next][1]){ judgeTimed(r, r.next); r.next++; changed = true; }
+  if (r.next >= r.times.length){
+    stopRun(); cur = parsed.notes.length; paint(); return;
+  }
+  if (changed){
+    paint(); scrollToCurrent();
+    const keep = r.times[r.next][0] - 1000;
+    if (r.frames.length && r.frames[0].t < keep) r.frames = r.frames.filter(fr => fr.t >= keep);
   }
 }
 
@@ -602,7 +785,8 @@ function tick(){
   const now = performance.now();
   if (now < muteUntil){ T.cand = null; T.onset = true; T.lastKey = null; showHeard(null); return; }
   const f = rms > gate ? detectPitch(buf.subarray(buf.length - 3072), ctx.sampleRate) : null;
-  track(now, rms, f, gate);
+  const mF = track(now, rms, f, gate);
+  if (run) runTick(now, mF == null ? null : mF, rms, gate);
 }
 
 function showHeard(mF){
@@ -624,6 +808,7 @@ function showHeard(mF){
 
 /* ---------- Reference tone ---------- */
 function hearNote(){
+  if (run) return;
   const t = parsed.notes[Math.min(cur, parsed.notes.length-1)];
   const c = ensureCtx();
   const f = 440 * Math.pow(2, (t.midi-69)/12);
@@ -649,7 +834,20 @@ const groups = {treble:"Treble clef (violin, voice, piano right hand)", bass:"Ba
 sel.addEventListener("change", () => selectPiece(+sel.value));
 $("listen").addEventListener("click", () => listening ? stopListening() : startListening());
 $("restart").addEventListener("click", restart);
-$("again").addEventListener("click", restart);
+$("again").addEventListener("click", () => scoreMode === "record" ? startRecord() : restart());
+$("record").addEventListener("click", startRecord);
+let playing = null;
+$("playback").addEventListener("click", () => {
+  if (!recUrl) return;
+  if (playing){ playing.pause(); playing = null; $("playback").textContent = "Listen back"; muteUntil = 0; return; }
+  const a = new Audio(recUrl);
+  playing = a; $("playback").textContent = "Stop playback";
+  muteUntil = performance.now() + 3600e3; // don't grade the playback coming out of the speaker
+  a.onended = () => { playing = null; $("playback").textContent = "Listen back"; muteUntil = performance.now() + 300; };
+  a.play().catch(() => { playing = null; $("playback").textContent = "Listen back"; muteUntil = 0; });
+});
+$("tempo").addEventListener("input", e => { tempo = +e.target.value; $("tempoval").textContent = String(tempo); store("tempo", tempo); });
+$("metro").addEventListener("change", e => { metro = e.target.checked; store("metro", metro); });
 $("next").addEventListener("click", () => selectPiece((pieceIdx+1) % PIECES.length));
 $("hear").addEventListener("click", hearNote);
 $("music").addEventListener("click", e => { const g = e.target.closest(".n"); if (g) jumpTo(+g.dataset.i); });
@@ -671,6 +869,9 @@ setMode(load("mode", "wait"));
 anyOct = !!load("anyoct", true); $("anyoct").checked = anyOct;
 showNames = !!load("names", false); $("names").checked = showNames;
 const sv = +load("sens", 5); $("sens").value = String(sv); setSens(sv);
+tempo = +load("tempo", 60); if (!(tempo >= 40 && tempo <= 120)) tempo = 60;
+$("tempo").value = String(tempo); $("tempoval").textContent = String(tempo);
+metro = !!load("metro", true); $("metro").checked = metro;
 let start = +load("piece", 0); if (!(start >= 0 && start < PIECES.length)) start = 0;
 selectPiece(start);
 
