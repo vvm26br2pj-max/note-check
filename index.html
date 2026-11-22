@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Note Check</title>
+<meta name="description" content="Play or sing a beginner melody. Each note turns green when you hit it and red when you miss.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&family=Noto+Music&display=swap">
+<style>
+/* Layout: one centered music stand — controls on top, a live readout, then the staff that wraps into systems. */
+:root{
+  --bg:#eaeef4; --surface:#ffffff; --ink:#18202c; --muted:#596476; --staff:#2a3342;
+  --border:#d3d9e2; --accent:#3150c9; --accent-soft:rgba(49,80,201,.13);
+  --ok:#17914c; --bad:#d23a2b; --ok-soft:rgba(23,145,76,.12); --bad-soft:rgba(210,58,43,.12);
+  --f-display:"Space Grotesk",system-ui,sans-serif;
+  --f-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-music:"Noto Music","Bravura Text","Apple Symbols","Segoe UI Symbol",serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#10141b; --surface:#19202a; --ink:#e7ebf1; --muted:#9aa4b4; --staff:#c7cfdb;
+  --border:#2c3543; --accent:#8098ff; --accent-soft:rgba(128,152,255,.17);
+  --ok:#3fd083; --bad:#ff6a5a; --ok-soft:rgba(63,208,131,.14); --bad-soft:rgba(255,106,90,.14);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#10141b; --surface:#19202a; --ink:#e7ebf1; --muted:#9aa4b4; --staff:#c7cfdb;
+  --border:#2c3543; --accent:#8098ff; --accent-soft:rgba(128,152,255,.17);
+  --ok:#3fd083; --bad:#ff6a5a; --ok-soft:rgba(63,208,131,.14); --bad-soft:rgba(255,106,90,.14);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:calc(20px + env(safe-area-inset-top,0px)) calc(40px + env(safe-area-inset-bottom,0px))}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header h1{font:700 1.9rem/1.1 var(--f-display);margin:0;letter-spacing:-.01em;text-wrap:balance}
+header p{margin:4px 0 0;color:var(--muted);max-width:62ch}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px}
+.controls{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:end}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.lbl{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:8px 10px;max-width:100%}
+button{font:600 .95rem var(--f-body);border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink);padding:9px 14px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+:root[data-theme="dark"] button.primary{color:#0d1220}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) button.primary{color:#0d1220}}
+button.primary.on{background:var(--bad);border-color:var(--bad)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.opts{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:.9rem}
+.opts label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:6px 11px;font-weight:500;font-size:.85rem;background:transparent}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+input[type=range]{width:110px;accent-color:var(--accent)}
+
+.readout{display:grid;grid-template-columns:auto auto 1fr auto;gap:10px 24px;align-items:center}
+.big{font:700 2rem/1 var(--f-display);font-variant-numeric:tabular-nums;min-width:3.2ch}
+.big.ok{color:var(--ok)} .big.bad{color:var(--bad)}
+.meter{position:relative;height:30px;min-width:0}
+.meter .track{position:absolute;left:0;right:0;top:13px;height:4px;border-radius:2px;background:var(--border)}
+.meter .zone{position:absolute;top:8px;height:14px;left:calc(50% - 7%);width:14%;border-radius:4px;background:var(--ok-soft)}
+.meter .mid{position:absolute;left:50%;top:5px;width:2px;height:20px;background:var(--muted);transform:translateX(-1px)}
+.meter .mark{position:absolute;top:6px;width:14px;height:18px;border-radius:4px;background:var(--accent);transform:translateX(-7px);left:50%;transition:left .08s linear,opacity .2s}
+.meter .mark.off{opacity:0}
+.meter-labels{display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-top:2px}
+.tune-word{font-weight:600;font-size:.9rem;min-height:1.3em}
+.level{width:90px}
+.level .bar{height:8px;border-radius:4px;background:var(--border);position:relative;overflow:hidden}
+.level .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent)}
+.level .gate{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);opacity:.5}
+.status{font-size:.88rem;color:var(--muted)}
+.status.err{color:var(--bad);font-weight:500}
+
+.stand-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 16px;margin-bottom:6px}
+.stand-head h2{font:700 1.35rem/1.2 var(--f-display);margin:0}
+.stand-head .meta{color:var(--muted);font-size:.88rem}
+.score{font-variant-numeric:tabular-nums;font-weight:600}
+#music{width:100%}
+#music svg{display:block;width:100%;height:auto;overflow:visible}
+.staffline{stroke:var(--staff);stroke-width:1}
+.bar{stroke:var(--staff)}
+.glyph{fill:var(--staff);font-family:var(--f-music)}
+.tsig{fill:var(--staff);font-family:var(--f-display);font-weight:700}
+.n{color:var(--staff);cursor:pointer}
+.n .band{fill:transparent}
+.n:hover .band{fill:var(--accent-soft);opacity:.5}
+.n.cur{color:var(--accent)}
+.n.cur .band{fill:var(--accent-soft);opacity:1}
+.n.ok{color:var(--ok)}
+.n.bad{color:var(--bad)}
+.n.bad .band{fill:var(--bad-soft)}
+.n .head-f{fill:currentColor}
+.n .head-h{fill:none;stroke:currentColor}
+.n .stem,.n .ledger,.n .flag{stroke:currentColor;fill:none}
+.n .acc{fill:currentColor;font-family:var(--f-music)}
+.n .dotm{fill:currentColor}
+.n .name{fill:var(--muted);font-family:var(--f-body);font-weight:600;text-anchor:middle}
+.n.cur .name,.n.ok .name,.n.bad .name{fill:currentColor}
+.n .retry{fill:var(--bad);display:none}
+.n.fixed .retry{display:inline}
+.hide-names .n .name{display:none}
+
+.done{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;margin-top:12px;padding:12px 14px;border-radius:10px;background:var(--ok-soft)}
+.done strong{font:700 1.1rem var(--f-display)}
+.key{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.82rem;color:var(--muted);margin-top:10px}
+.key span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px;background:var(--c)}
+.tips{font-size:.88rem;color:var(--muted)}
+.tips ul{margin:6px 0 0;padding-left:20px}
+
+@media (max-width:640px){
+  header h1{font-size:1.55rem}
+  .readout{grid-template-columns:auto auto;}
+  .readout .meter-box{grid-column:1/-1}
+  .readout .level-box{grid-column:1/-1}
+  .level{width:100%}
+  .big{font-size:1.7rem}
+}
+@media (prefers-reduced-motion:reduce){.meter .mark{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Note Check</h1>
+    <p>Pick a piece, press <b>Start listening</b>, and play or sing. Each note turns green when you play it right and red when you miss.</p>
+  </header>
+
+  <section class="panel" aria-label="Controls">
+    <div class="controls">
+      <div class="field" style="flex:1 1 240px">
+        <label for="piece">Piece</label>
+        <select id="piece"></select>
+      </div>
+      <div class="btns">
+        <button id="listen" class="primary" type="button">Start listening</button>
+        <button id="hear" type="button" title="Play the current note so you can hear it">Hear note</button>
+        <button id="restart" type="button">Restart</button>
+      </div>
+    </div>
+    <div class="opts">
+      <span class="lbl">When I miss</span>
+      <span class="seg" role="group" aria-label="When I miss">
+        <button type="button" id="mode-wait" aria-pressed="true">Wait for the right note</button>
+        <button type="button" id="mode-go" aria-pressed="false">Keep going</button>
+      </span>
+      <label><input type="checkbox" id="anyoct" checked> Any octave counts</label>
+      <label><input type="checkbox" id="names"> Show letter names</label>
+      <label>Mic sensitivity <input type="range" id="sens" min="1" max="10" step="1" value="5"></label>
+    </div>
+  </section>
+
+  <section class="panel readout" aria-live="polite">
+    <div><div class="lbl">Play this</div><div class="big" id="target">–</div></div>
+    <div><div class="lbl">I hear</div><div class="big" id="heard">–</div></div>
+    <div class="meter-box">
+      <div class="tune-word" id="tuneword">&nbsp;</div>
+      <div class="meter" aria-hidden="true"><div class="track"></div><div class="zone"></div><div class="mid"></div><div class="mark off" id="mark"></div></div>
+      <div class="meter-labels"><span>Flat</span><span>Sharp</span></div>
+    </div>
+    <div class="level-box">
+      <div class="lbl">Mic level</div>
+      <div class="level"><div class="bar"><div class="fill" id="lvl"></div><div class="gate" id="gate"></div></div></div>
+      <div class="status" id="status">Mic is off</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="stand-head">
+      <h2 id="ptitle">–</h2>
+      <div class="meta"><span id="pmeta"></span> · <span class="score" id="score">0 / 0</span></div>
+    </div>
+    <div id="music"></div>
+    <div class="done" id="done" hidden>
+      <strong id="donemsg">Done!</strong>
+      <div class="btns"><button type="button" id="again">Play again</button><button type="button" class="primary" id="next">Next piece</button></div>
+    </div>
+    <div class="key"><span style="--c:var(--accent)">Your note</span><span style="--c:var(--ok)">Right</span><span style="--c:var(--bad)">Wrong</span><span style="--c:var(--bad)">Red dot: took more than one try</span></div>
+  </section>
+
+  <section class="tips">
+    <b>Tips</b>
+    <ul>
+      <li>Play one clear note at a time. To repeat the same note, stop briefly between them (a small gap or a new bow stroke).</li>
+      <li>Tap any note on the staff to jump to it.</li>
+      <li>If quiet notes are missed, raise the mic sensitivity. If background noise turns notes red, lower it.</li>
+      <li>Headphones help with <b>Hear note</b>, so the mic doesn't pick up the speaker.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+/* ---------- Pieces (all traditional / public domain melodies) ---------- */
+const PIECES = [
+  {title:"Hot Cross Buns", by:"Traditional", clef:"treble", key:"G",
+   notes:"B4q A4q G4h | B4q A4q G4h | G4e G4e G4e G4e A4e A4e A4e A4e | B4q A4q G4h"},
+  {title:"Mary Had a Little Lamb", by:"Traditional", clef:"treble", key:"G",
+   notes:"B4q A4q G4q A4q | B4q B4q B4h | A4q A4q A4h | B4q D5q D5h | B4q A4q G4q A4q | B4q B4q B4q B4q | A4q A4q B4q A4q | G4w"},
+  {title:"Au Clair de la Lune", by:"French folk song", clef:"treble", key:"G",
+   notes:"G4q G4q G4q A4q | B4h A4h | G4q B4q A4q A4q | G4w | G4q G4q G4q A4q | B4h A4h | G4q B4q A4q A4q | G4w"},
+  {title:"Twinkle, Twinkle, Little Star", by:"Traditional", clef:"treble", key:"D",
+   notes:"D4q D4q A4q A4q | B4q B4q A4h | G4q G4q F#4q F#4q | E4q E4q D4h | A4q A4q G4q G4q | F#4q F#4q E4h | A4q A4q G4q G4q | F#4q F#4q E4h | D4q D4q A4q A4q | B4q B4q A4h | G4q G4q F#4q F#4q | E4q E4q D4h"},
+  {title:"Frère Jacques", by:"French round", clef:"treble", key:"G",
+   notes:"G4q A4q B4q G4q | G4q A4q B4q G4q | B4q C5q D5h | B4q C5q D5h | D5e E5e D5e C5e B4q G4q | D5e E5e D5e C5e B4q G4q | G4q D4q G4h | G4q D4q G4h"},
+  {title:"Lightly Row", by:"German folk song", clef:"treble", key:"G",
+   notes:"D5q B4q B4h | C5q A4q A4h | G4q A4q B4q C5q | D5q D5q D5h | D5q B4q B4h | C5q A4q A4h | G4q B4q D5q D5q | G4w"},
+  {title:"Ode to Joy", by:"Ludwig van Beethoven", clef:"treble", key:"D",
+   notes:"F#4q F#4q G4q A4q | A4q G4q F#4q E4q | D4q D4q E4q F#4q | F#4q. E4e E4h | F#4q F#4q G4q A4q | A4q G4q F#4q E4q | D4q D4q E4q F#4q | E4q. D4e D4h"},
+  {title:"Hot Cross Buns", by:"Traditional", clef:"bass", key:"C",
+   notes:"E3q D3q C3h | E3q D3q C3h | C3e C3e C3e C3e D3e D3e D3e D3e | E3q D3q C3h"},
+  {title:"Mary Had a Little Lamb", by:"Traditional", clef:"bass", key:"C",
+   notes:"E3q D3q C3q D3q | E3q E3q E3h | D3q D3q D3h | E3q G3q G3h | E3q D3q C3q D3q | E3q E3q E3q E3q | D3q D3q E3q D3q | C3w"},
+  {title:"Au Clair de la Lune", by:"French folk song", clef:"bass", key:"C",
+   notes:"C3q C3q C3q D3q | E3h D3h | C3q E3q D3q D3q | C3w | C3q C3q C3q D3q | E3h D3h | C3q E3q D3q D3q | C3w"},
+  {title:"Twinkle, Twinkle, Little Star", by:"Traditional", clef:"bass", key:"C",
+   notes:"C3q C3q G3q G3q | A3q A3q G3h | F3q F3q E3q E3q | D3q D3q C3h | G3q G3q F3q F3q | E3q E3q D3h | G3q G3q F3q F3q | E3q E3q D3h | C3q C3q G3q G3q | A3q A3q G3h | F3q F3q E3q E3q | D3q D3q C3h"},
+  {title:"Ode to Joy", by:"Ludwig van Beethoven", clef:"bass", key:"C",
+   notes:"E3q E3q F3q G3q | G3q F3q E3q D3q | C3q C3q D3q E3q | E3q. D3e D3h | E3q E3q F3q G3q | G3q F3q E3q D3q | C3q C3q D3q E3q | D3q. C3e C3h"},
+];
+
+/* ---------- Music helpers ---------- */
+const LETTERS = "CDEFGAB";
+const SEMI = {C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+const DUR = {w:4,h:2,q:1,e:0.5};
+const KEYS = {C:0,G:1,D:2,A:3,E:4,F:-1,Bb:-2,Eb:-3};
+const SHARP_ORDER = "FCGDAEB", FLAT_ORDER = "BEADGCF";
+const KEYSIG_POS = { // letter+octave of each accidental in a key signature
+  treble:{sharp:["F5","C5","G5","D5","A4","E5","B4"], flat:["B4","E5","A4","D5","G4","C5","F4"]},
+  bass:{sharp:["F3","C3","G3","D3","A2","E3","B2"], flat:["B2","E3","A2","D3","G2","C3","F2"]},
+};
+const BOTTOM = {treble:2+7*4, bass:4+7*2}; // E4, G2 diatonic steps
+const step = (letter, oct) => LETTERS.indexOf(letter) + 7*oct;
+
+function keyAccidentals(key){
+  const n = KEYS[key] || 0, map = {};
+  if (n > 0) for (let i=0;i<n;i++) map[SHARP_ORDER[i]] = 1;
+  if (n < 0) for (let i=0;i<-n;i++) map[FLAT_ORDER[i]] = -1;
+  return map;
+}
+function parsePiece(p){
+  const measures = [], notes = [];
+  p.notes.split("|").forEach((m, mi) => {
+    const list = [];
+    let beats = 0;
+    m.trim().split(/\s+/).forEach(tok => {
+      const r = /^([A-G])(#|b)?(\d)([whqe])(\.)?$/.exec(tok);
+      if (!r) { console.warn("Bad token", tok); return; }
+      const acc = r[2] === "#" ? 1 : r[2] === "b" ? -1 : 0;
+      const oct = +r[3];
+      const dur = DUR[r[4]] * (r[5] ? 1.5 : 1);
+      const n = {letter:r[1], acc, oct, type:r[4], dotted:!!r[5], dur,
+        midi: SEMI[r[1]] + acc + 12*(oct+1), measure: mi, i: notes.length};
+      beats += dur; list.push(n); notes.push(n);
+    });
+    if (Math.abs(beats-4) > 1e-6) console.warn(p.title, "measure", mi+1, "has", beats, "beats");
+    measures.push(list);
+  });
+  return {measures, notes};
+}
+const SHARP_NAMES = ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
+const FLAT_NAMES  = ["C","D♭","D","E♭","E","F","G♭","G","A♭","A","B♭","B"];
+function midiName(m, preferFlats){
+  const pc = ((m%12)+12)%12, oct = Math.floor(m/12)-1;
+  return (preferFlats ? FLAT_NAMES : SHARP_NAMES)[pc] + oct;
+}
+const noteName = n => n.letter + (n.acc === 1 ? "♯" : n.acc === -1 ? "♭" : "") + n.oct;
+
+/* ---------- State ---------- */
+const $ = id => document.getElementById(id);
+let pieceIdx = 0, piece = null, parsed = null;
+let cur = 0, marks = [], missed = [];
+let mode = "wait", anyOct = true, showNames = false, sens = 5;
+
+function store(k, v){ try { localStorage.setItem("notecheck:"+k, JSON.stringify(v)); } catch(e){} }
+function load(k, d){ try { const v = localStorage.getItem("notecheck:"+k); return v == null ? d : JSON.parse(v); } catch(e){ return d; } }
+
+/* ---------- Staff rendering ---------- */
+function slotBase(n, S, keyAcc){
+  let w = S*(2.2 + 1.3*n.dur);
+  if (needsAcc(n, keyAcc)) w += S*1.1;
+  if (n.dotted) w += S*0.6;
+  return w;
+}
+function needsAcc(n, keyAcc){ return (keyAcc[n.letter] || 0) !== n.acc; }
+
+function render(){
+  const box = $("music");
+  const width = Math.max(300, box.clientWidth);
+  const S = width < 440 ? 7 : width < 560 ? 8.5 : width < 800 ? 10 : 11.5; // staff space in px
+  const clef = piece.clef, keyAcc = keyAccidentals(piece.key), nKey = Math.abs(KEYS[piece.key]||0);
+  const headerW = first => S*3.6 + nKey*S*1.0 + (first ? S*2.4 : 0) + S*0.6;
+  const mPadL = S*0.9, mPadR = S*0.5;
+
+  // greedy line breaking
+  const systems = [];
+  let line = [], used = headerW(true);
+  parsed.measures.forEach(m => {
+    const w = mPadL + mPadR + m.reduce((a,n)=>a+slotBase(n,S,keyAcc),0);
+    if (line.length && used + w > width - 2) { systems.push(line); line = []; used = headerW(false); }
+    line.push(m); used += w;
+  });
+  if (line.length) systems.push(line);
+
+  const top = S*4.5, namesH = showNames ? S*2.6 : 0;
+  const H = top + S*4 + S*4.5 + namesH;
+  const yPos = p => top + S*4 - p*S/2;
+  const bottom = BOTTOM[clef];
+  let html = "";
+
+  systems.forEach((sys, si) => {
+    const first = si === 0, last = si === systems.length-1;
+    const hw = headerW(first);
+    const baseSum = sys.reduce((a,m)=>a+m.reduce((b,n)=>b+slotBase(n,S,keyAcc),0),0);
+    const fixed = sys.length*(mPadL+mPadR);
+    const natural = hw + fixed + baseSum;
+    let k = (width - 1 - hw - fixed) / baseSum;
+    if (last && natural < width*0.72) k = 1.15 > k ? k : 1.15; // don't stretch a short last line too far
+    const sysW = last && natural < width*0.72 ? hw + fixed + baseSum*k : width - 1;
+
+    let s = `<svg viewBox="0 0 ${width} ${H.toFixed(1)}" width="${width}" height="${H.toFixed(1)}" role="img" aria-label="Line ${si+1} of the music">`;
+    for (let l=0;l<5;l++){ const y = top + l*S; s += `<line class="staffline" x1="0" x2="${sysW}" y1="${y}" y2="${y}"/>`; }
+    // clef
+    if (clef === "treble") s += `<text class="glyph" x="${S*0.3}" y="${yPos(2)}" font-size="${S*4}">\u{1D11E}</text>`;
+    else s += `<text class="glyph" x="${S*0.3}" y="${yPos(6)}" font-size="${S*4}">\u{1D122}</text>`;
+    // key signature
+    const ks = KEYS[piece.key]||0;
+    const ksList = ks > 0 ? KEYSIG_POS[clef].sharp.slice(0,ks) : KEYSIG_POS[clef].flat.slice(0,-ks);
+    ksList.forEach((ln, j) => {
+      const p = step(ln[0], +ln[1]) - bottom;
+      s += `<text class="glyph" x="${S*3.5 + j*S*1.0}" y="${yPos(p) + (ks>0 ? S*0.75 : S*0.55)}" font-size="${S*2.4}">${ks>0?"♯":"♭"}</text>`;
+    });
+    // time signature
+    if (first){
+      const tx = S*3.6 + nKey*S*1.0 + S*0.5;
+      s += `<text class="tsig" x="${tx}" y="${yPos(6)+S*0.95}" font-size="${S*2.6}">4</text>`;
+      s += `<text class="tsig" x="${tx}" y="${yPos(2)+S*0.95}" font-size="${S*2.6}">4</text>`;
+    }
+    // measures
+    let x = hw;
+    sys.forEach((m, mi) => {
+      x += mPadL;
+      m.forEach(n => {
+        const w = slotBase(n,S,keyAcc)*k;
+        s += noteSVG(n, x, w, S, yPos, bottom, keyAcc, top);
+        x += w;
+      });
+      x += mPadR;
+      const isEnd = last && mi === sys.length-1;
+      if (isEnd) {
+        s += `<line class="bar" x1="${x-S*0.6}" x2="${x-S*0.6}" y1="${top}" y2="${top+S*4}" stroke-width="1"/>`;
+        s += `<line class="bar" x1="${x-S*0.18}" x2="${x-S*0.18}" y1="${top}" y2="${top+S*4}" stroke-width="${S*0.35}"/>`;
+      } else {
+        s += `<line class="bar" x1="${x}" x2="${x}" y1="${top}" y2="${top+S*4}" stroke-width="1"/>`;
+      }
+    });
+    s += `</svg>`;
+    html += s;
+  });
+  box.innerHTML = html;
+  box.classList.toggle("hide-names", !showNames);
+  paint();
+}
+
+function noteSVG(n, x, w, S, yPos, bottom, keyAcc, top){
+  const p = step(n.letter, n.oct) - bottom;
+  const showAcc = needsAcc(n, keyAcc);
+  const cx = x + S*1.1 + (showAcc ? S*1.1 : 0);
+  const cy = yPos(p);
+  const rx = n.type === "w" ? S*0.78 : S*0.62, ry = S*0.45;
+  let g = `<g class="n" data-i="${n.i}" tabindex="-1">`;
+  g += `<rect class="band" x="${cx-S*1.5}" y="${top-S*2.6}" width="${S*3}" height="${S*4+S*5.6}" rx="${S*0.6}"/>`;
+  // ledger lines
+  for (let q=-2;q>=p;q-=2) g += `<line class="ledger" x1="${cx-rx-S*0.45}" x2="${cx+rx+S*0.45}" y1="${yPos(q)}" y2="${yPos(q)}" stroke-width="1.2"/>`;
+  for (let q=10;q<=p;q+=2) g += `<line class="ledger" x1="${cx-rx-S*0.45}" x2="${cx+rx+S*0.45}" y1="${yPos(q)}" y2="${yPos(q)}" stroke-width="1.2"/>`;
+  if (showAcc){
+    const ch = n.acc === 1 ? "♯" : n.acc === -1 ? "♭" : "♮";
+    g += `<text class="acc" x="${cx - rx - S*1.3}" y="${cy + S*0.7}" font-size="${S*2.3}">${ch}</text>`;
+  }
+  const hollow = n.type === "h" || n.type === "w";
+  g += `<ellipse class="${hollow?"head-h":"head-f"}" cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" transform="rotate(-20 ${cx} ${cy})"${hollow?` stroke-width="${S*0.2}"`:""}/>`;
+  if (n.type !== "w"){
+    const up = p < 4;
+    const sx = up ? cx + rx*0.9 : cx - rx*0.9;
+    const y1 = up ? cy - S*0.15 : cy + S*0.15;
+    const y2 = up ? cy - S*3.4 : cy + S*3.4;
+    g += `<line class="stem" x1="${sx}" x2="${sx}" y1="${y1}" y2="${y2}" stroke-width="${S*0.13}"/>`;
+    if (n.type === "e"){
+      const d = up
+        ? `M${sx},${y2} c${S*0.1},${S*1.1} ${S*1.3},${S*1.3} ${S*0.9},${S*2.7}`
+        : `M${sx},${y2} c${S*0.1},${-S*1.1} ${S*1.3},${-S*1.3} ${S*0.9},${-S*2.7}`;
+      g += `<path class="flag" d="${d}" stroke-width="${S*0.2}" stroke-linecap="round"/>`;
+    }
+  }
+  if (n.dotted){
+    const dy = (p % 2 === 0) ? -S/2 : 0;
+    g += `<circle class="dotm" cx="${cx+rx+S*0.55}" cy="${cy+dy}" r="${S*0.2}"/>`;
+  }
+  const nameY = top + S*4 + S*5.0;
+  g += `<circle class="retry" cx="${cx}" cy="${top + S*4 + S*3.9}" r="${S*0.28}"/>`;
+  g += `<text class="name" x="${cx}" y="${nameY}" font-size="${S*1.35}">${n.letter}${n.acc===1?"♯":n.acc===-1?"♭":""}</text>`;
+  g += `</g>`;
+  return g;
+}
+
+function paint(){
+  document.querySelectorAll("#music .n").forEach(el => {
+    const i = +el.dataset.i;
+    const m = marks[i];
+    el.classList.toggle("cur", i === cur);
+    el.classList.toggle("ok", m === "ok" || m === "fixed");
+    el.classList.toggle("fixed", m === "fixed");
+    el.classList.toggle("bad", m === "bad");
+  });
+  const total = parsed.notes.length;
+  const right = marks.filter(m => m === "ok").length;
+  $("score").textContent = `${right} of ${total} right first try`;
+  const t = parsed.notes[cur];
+  $("target").textContent = t ? noteName(t) : "Done";
+  const fin = cur >= total;
+  $("done").hidden = !fin;
+  if (fin){
+    $("donemsg").textContent = right === total ? `Perfect! All ${total} notes right first try.` : `Done! ${right} of ${total} notes right first try.`;
+  }
+}
+
+function scrollToCurrent(){
+  const el = document.querySelector(`#music .n[data-i="${cur}"]`);
+  if (!el) return;
+  const svg = el.ownerSVGElement, r = svg.getBoundingClientRect();
+  if (r.top < 0 || r.bottom > window.innerHeight) {
+    svg.scrollIntoView({block:"nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
+  }
+}
+
+function selectPiece(i){
+  pieceIdx = i; piece = PIECES[i]; parsed = parsePiece(piece);
+  $("piece").value = String(i);
+  $("ptitle").textContent = piece.title;
+  const keyName = piece.key + " major";
+  $("pmeta").textContent = `${piece.by} · ${piece.clef === "treble" ? "Treble" : "Bass"} clef · ${keyName}`;
+  store("piece", i);
+  restart();
+}
+function restart(){
+  cur = 0; marks = new Array(parsed.notes.length).fill(null); missed = new Array(parsed.notes.length).fill(false);
+  render(); requireNewNote();
+}
+function advance(){
+  cur++; paint(); scrollToCurrent();
+}
+function jumpTo(i){
+  cur = i; if (marks[i] === "bad") marks[i] = null; paint(); requireNewNote();
+}
+
+function judge(midiF){
+  if (cur >= parsed.notes.length) return;
+  const t = parsed.notes[cur].midi;
+  let d = midiF - t;
+  if (anyOct) d = ((d % 12) + 18) % 12 - 6;
+  if (Math.abs(d) < 0.6){
+    marks[cur] = missed[cur] ? "fixed" : "ok";
+    advance();
+  } else {
+    missed[cur] = true; marks[cur] = "bad";
+    if (mode === "go") advance(); else paint();
+  }
+}
+
+/* ---------- Audio: microphone + YIN pitch detection ---------- */
+let ctx = null, analyser = null, stream = null, buf = null, raf = 0, listening = false;
+let muteUntil = 0;
+const gateFor = v => 0.04 * Math.pow(0.6, v - 1);
+
+function ensureCtx(){
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === "suspended") ctx.resume();
+  return ctx;
+}
+function setStatus(msg, err){ const s = $("status"); s.textContent = msg; s.classList.toggle("err", !!err); }
+
+async function startListening(){
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    setStatus("The microphone only works on a secure (https) page.", true); return;
+  }
+  ensureCtx();
+  setStatus("Asking for the microphone…");
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
+  } catch (e) {
+    const denied = e && (e.name === "NotAllowedError" || e.name === "SecurityError");
+    setStatus(denied ? "Microphone access was blocked. Allow it in the browser's address bar, then try again." : "No microphone was found.", true);
+    return;
+  }
+  await ctx.resume();
+  const src = ctx.createMediaStreamSource(stream);
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 4096;
+  src.connect(analyser);
+  buf = new Float32Array(analyser.fftSize);
+  listening = true; requireNewNote();
+  $("listen").textContent = "Stop listening"; $("listen").classList.add("on");
+  setStatus("Listening");
+  tick();
+}
+function stopListening(){
+  listening = false; cancelAnimationFrame(raf);
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+  $("listen").textContent = "Start listening"; $("listen").classList.remove("on");
+  setStatus("Mic is off"); showHeard(null); $("lvl").style.width = "0";
+}
+
+// YIN on a 2x-downsampled copy of the buffer. Returns frequency in Hz or null.
+let ds = null, diff = null;
+function detectPitch(input, sr){
+  let data = input, rate = sr;
+  if (sr >= 32000){
+    const n = input.length >> 1;
+    if (!ds || ds.length !== n) ds = new Float32Array(n);
+    for (let i=0;i<n;i++) ds[i] = (input[2*i] + input[2*i+1]) * 0.5;
+    data = ds; rate = sr/2;
+  }
+  const minF = 60, maxF = 1500;
+  const maxTau = Math.min(Math.floor(rate/minF), (data.length>>1));
+  const minTau = Math.max(2, Math.floor(rate/maxF));
+  const W = data.length - maxTau;
+  if (!diff || diff.length !== maxTau+1) diff = new Float32Array(maxTau+1);
+  for (let tau=1; tau<=maxTau; tau++){
+    let s = 0;
+    for (let j=0;j<W;j++){ const d = data[j] - data[j+tau]; s += d*d; }
+    diff[tau] = s;
+  }
+  // cumulative mean normalized difference
+  diff[0] = 1; let run = 0;
+  for (let tau=1; tau<=maxTau; tau++){ run += diff[tau]; diff[tau] = run ? diff[tau]*tau/run : 1; }
+  const TH = 0.15;
+  let tau = -1;
+  for (let t=minTau; t<maxTau; t++){
+    if (diff[t] < TH){ while (t+1 < maxTau && diff[t+1] < diff[t]) t++; tau = t; break; }
+  }
+  if (tau < 0) return null;
+  // parabolic interpolation
+  const a = diff[tau-1], b = diff[tau], c = diff[tau+1];
+  const den = a - 2*b + c;
+  const shift = den ? 0.5*(a - c)/den : 0;
+  return rate / (tau + (Math.abs(shift) < 1 ? shift : 0));
+}
+
+// Note tracker: decides when a new note has started and is steady enough to judge.
+const T = {cand:null, lastKey:null, onset:true, silentSince:0, peak:0, dipped:false, dipLevel:0};
+function requireNewNote(){
+  // after a jump or restart, a note already sounding must be re-played to count
+  T.onset = false; T.lastKey = T.cand ? T.cand.key : null;
+}
+function track(now, rms, f, gate){
+  if (f == null && rms > gate) return; // loud but no clear pitch (bow noise, consonant): ignore this frame
+  if (f == null){
+    // quiet frame: whatever comes next is a new note
+    T.onset = true; T.cand = null; T.lastKey = null; T.peak = 0; T.dipped = false;
+    showHeard(null);
+    return;
+  }
+  // re-articulation of the same pitch: level dips well below its peak, then rises again
+  if (rms > T.peak) T.peak = rms; else T.peak *= 0.996;
+  if (!T.dipped && rms < T.peak*0.4){ T.dipped = true; T.dipLevel = rms; }
+  if (T.dipped){
+    T.dipLevel = Math.min(T.dipLevel, rms);
+    if (rms > T.dipLevel*2 && rms > gate*1.5){ T.dipped = false; T.peak = rms; T.onset = true; T.cand = null; }
+  }
+  const mF = 69 + 12*Math.log2(f/440);
+  const m = Math.round(mF);
+  const key = anyOct ? ((m%12)+12)%12 : m;
+  if (!T.cand || T.cand.key !== key) T.cand = {key, start:now, sum:0, n:0};
+  T.cand.sum += mF; T.cand.n++;
+  showHeard(mF);
+  const ready = T.onset || T.cand.key !== T.lastKey;
+  if (ready && now - T.cand.start >= 90 && T.cand.n >= 3){
+    T.onset = false; T.lastKey = key;
+    judge(T.cand.sum / T.cand.n);
+  }
+}
+
+function tick(){
+  if (!listening) return;
+  raf = requestAnimationFrame(tick);
+  analyser.getFloatTimeDomainData(buf);
+  // level of the newest ~20 ms only, so short gaps between notes show up quickly
+  const RECENT = 1024;
+  let s = 0; for (let i=buf.length-RECENT;i<buf.length;i++) s += buf[i]*buf[i];
+  const rms = Math.sqrt(s/RECENT);
+  const gate = gateFor(sens);
+  $("lvl").style.width = Math.min(100, Math.sqrt(rms/0.25)*100) + "%";
+  const now = performance.now();
+  if (now < muteUntil){ T.cand = null; T.onset = true; T.lastKey = null; showHeard(null); return; }
+  const f = rms > gate ? detectPitch(buf.subarray(buf.length - 3072), ctx.sampleRate) : null;
+  track(now, rms, f, gate);
+}
+
+function showHeard(mF){
+  const heard = $("heard"), mark = $("mark"), word = $("tuneword");
+  if (mF == null){ heard.textContent = "–"; heard.className = "big"; mark.classList.add("off"); word.innerHTML = "&nbsp;"; return; }
+  const m = Math.round(mF);
+  heard.textContent = midiName(m, (KEYS[piece.key]||0) < 0);
+  const t = parsed.notes[cur];
+  if (!t){ heard.className = "big"; mark.classList.add("off"); word.innerHTML = "&nbsp;"; return; }
+  let d = mF - t.midi;
+  if (anyOct) d = ((d % 12) + 18) % 12 - 6;
+  const right = Math.abs(d) < 0.6;
+  heard.className = "big " + (right ? "ok" : "bad");
+  mark.classList.remove("off");
+  mark.style.left = (50 + Math.max(-1, Math.min(1, d)) * 46) + "%";
+  word.textContent = right ? (Math.abs(d) < 0.15 ? "In tune" : d > 0 ? "A little sharp" : "A little flat")
+                           : (d > 0 ? "Too high" : "Too low");
+}
+
+/* ---------- Reference tone ---------- */
+function hearNote(){
+  const t = parsed.notes[Math.min(cur, parsed.notes.length-1)];
+  const c = ensureCtx();
+  const f = 440 * Math.pow(2, (t.midi-69)/12);
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = "triangle"; o.frequency.value = f;
+  const t0 = c.currentTime;
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(0.25, t0+0.03);
+  g.gain.exponentialRampToValueAtTime(0.001, t0+0.9);
+  o.connect(g).connect(c.destination);
+  o.start(t0); o.stop(t0+0.95);
+  muteUntil = performance.now() + 1150;
+}
+
+/* ---------- Wiring ---------- */
+const sel = $("piece");
+const groups = {treble:"Treble clef (violin, voice, piano right hand)", bass:"Bass clef (cello, low voice, piano left hand)"};
+["treble","bass"].forEach(cl => {
+  const og = document.createElement("optgroup"); og.label = groups[cl];
+  PIECES.forEach((p, i) => { if (p.clef === cl){ const o = document.createElement("option"); o.value = String(i); o.textContent = p.title; og.appendChild(o); } });
+  sel.appendChild(og);
+});
+sel.addEventListener("change", () => selectPiece(+sel.value));
+$("listen").addEventListener("click", () => listening ? stopListening() : startListening());
+$("restart").addEventListener("click", restart);
+$("again").addEventListener("click", restart);
+$("next").addEventListener("click", () => selectPiece((pieceIdx+1) % PIECES.length));
+$("hear").addEventListener("click", hearNote);
+$("music").addEventListener("click", e => { const g = e.target.closest(".n"); if (g) jumpTo(+g.dataset.i); });
+
+function setMode(m){
+  mode = m; store("mode", m);
+  $("mode-wait").setAttribute("aria-pressed", String(m === "wait"));
+  $("mode-go").setAttribute("aria-pressed", String(m === "go"));
+}
+$("mode-wait").addEventListener("click", () => setMode("wait"));
+$("mode-go").addEventListener("click", () => setMode("go"));
+$("anyoct").addEventListener("change", e => { anyOct = e.target.checked; store("anyoct", anyOct); requireNewNote(); });
+$("names").addEventListener("change", e => { showNames = e.target.checked; store("names", showNames); render(); });
+function setSens(v){ sens = v; store("sens", v); $("gate").style.left = Math.min(100, Math.sqrt(gateFor(v)/0.25)*100) + "%"; }
+$("sens").addEventListener("input", e => setSens(+e.target.value));
+
+// restore preferences
+setMode(load("mode", "wait"));
+anyOct = !!load("anyoct", true); $("anyoct").checked = anyOct;
+showNames = !!load("names", false); $("names").checked = showNames;
+const sv = +load("sens", 5); $("sens").value = String(sv); setSens(sv);
+let start = +load("piece", 0); if (!(start >= 0 && start < PIECES.length)) start = 0;
+selectPiece(start);
+
+let rt = 0, lastW = $("music").clientWidth;
+window.addEventListener("resize", () => {
+  clearTimeout(rt);
+  rt = setTimeout(() => { const w = $("music").clientWidth; if (w !== lastW){ lastW = w; render(); } }, 120);
+});
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(render);
+})();
+</script>
+</body>
+</html>
